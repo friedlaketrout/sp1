@@ -47,6 +47,7 @@ impl<F: PrimeField32> MachineAir<F> for Blake2fCompressChip {
             } else {
                 unreachable!()
             };
+
             // blake2f todo: Event needs reference here, but other examples don't have it
             let [last_inner_round, last_outer_round] = self.event_to_rows(&event, &mut wrapped_rows, &mut Vec::new());
             inner_round = last_inner_round;

@@ -6,6 +6,7 @@ mod trace;
 pub struct Blake2fCompressChip;
 
 impl Blake2fCompressChip {
+    
     pub const fn new() -> Self {
         Self {}
     }

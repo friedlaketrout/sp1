@@ -61,6 +61,16 @@ const XY_INDICES: [[i32; 2]; 8] = [
     [14, 15],
 ];
 
+// blake2f todo: Get rid of these
+const h: [u64; 8] = [7640891576939301192, 13503953896175478587,
+     4354685564936845355, 11912009170470909681,
+      5840696475078001361, 11170449401992604703,
+       2270897969802886507, 6620516959819538809];
+const m: [u64; 16] = [6513249, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+const t0: u64 = 3;
+const t1: u64 = 0;
+const f_flag: bool = true;
+
 impl<F> BaseAir<F> for Blake2fCompressChip {
     fn width(&self) -> usize {
         NUM_BLAKE2F_COMPRESS_COLS
@@ -150,6 +160,37 @@ impl Blake2fCompressChip {
         next: &Blake2fCompressColumns<AB::Var>,
     ) {
         // Check first eight words match h
+        let [h_word_0_0, h_word_0_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[0]);
+        builder.when_first_row().assert_word_eq(local.v0[0], h_word_0_0);
+        builder.when_first_row().assert_word_eq(local.v0[1], h_word_0_1);
+
+        let [h_word_1_0, h_word_1_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[1]);
+        builder.when_first_row().assert_word_eq(local.v1[0], h_word_1_0);
+        builder.when_first_row().assert_word_eq(local.v1[1], h_word_1_1);   
+
+        let [h_word_2_0, h_word_2_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[2]);
+        builder.when_first_row().assert_word_eq(local.v2[0], h_word_2_0);
+        builder.when_first_row().assert_word_eq(local.v2[1], h_word_2_1);   
+
+        let [h_word_3_0, h_word_3_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[3]);
+        builder.when_first_row().assert_word_eq(local.v3[0], h_word_3_0);
+        builder.when_first_row().assert_word_eq(local.v3[1], h_word_3_1);   
+
+        let [h_word_4_0, h_word_4_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[4]);
+        builder.when_first_row().assert_word_eq(local.v4[0], h_word_4_0);
+        builder.when_first_row().assert_word_eq(local.v4[1], h_word_4_1);   
+
+        let [h_word_5_0, h_word_5_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[5]);
+        builder.when_first_row().assert_word_eq(local.v5[0], h_word_5_0);
+        builder.when_first_row().assert_word_eq(local.v5[1], h_word_5_1);   
+
+        let [h_word_6_0, h_word_6_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[6]);
+        builder.when_first_row().assert_word_eq(local.v6[0], h_word_6_0);
+        builder.when_first_row().assert_word_eq(local.v6[1], h_word_6_1);   
+
+        let [h_word_7_0, h_word_7_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[7]);
+        builder.when_first_row().assert_word_eq(local.v7[0], h_word_7_0);
+        builder.when_first_row().assert_word_eq(local.v7[1], h_word_7_1);   
 
         // Check next 4 words match IV
         let [iv_word_0_0, iv_word_0_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[0]);
@@ -168,15 +209,29 @@ impl Blake2fCompressChip {
         builder.when_first_row().assert_word_eq(local.v11[0], iv_word_3_0);
         builder.when_first_row().assert_word_eq(local.v11[1], iv_word_3_1);
 
+        // Check 13th and 14th word properly handle offset
+        const TO_CHECK_13: u64 = IV[4] ^ t0;
+        let [xored_0_0, xored_0_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(TO_CHECK_13);
+        builder.when_first_row().assert_word_eq(local.v12[0], xored_0_0);
+        builder.when_first_row().assert_word_eq(local.v12[1], xored_0_1);
+
+        const TO_CHECK_14: u64 = IV[5] ^ t1;
+        let [xored_1_0, xored_1_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(TO_CHECK_14);
+        builder.when_first_row().assert_word_eq(local.v13[0], xored_1_0);
+        builder.when_first_row().assert_word_eq(local.v13[1], xored_1_1);
+
+        // Check 15th word is inverted if f_flag is set
+        if f_flag {
+            const TO_CHECK_INVERTED: u64 = !IV[6];
+            let [inverted_0_0, inverted_0_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(TO_CHECK_INVERTED);
+            builder.when_first_row().assert_word_eq(local.v14[0], inverted_0_0);
+            builder.when_first_row().assert_word_eq(local.v14[1], inverted_0_1);
+        }
+
         // Check last word matches IV
         let [iv_word_7_0, iv_word_7_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[7]);
         builder.when_first_row().assert_word_eq(local.v15[0], iv_word_7_0);
         builder.when_first_row().assert_word_eq(local.v15[1], iv_word_7_1);
-
-        // Check 13th and 14th word properly handle offset
-        
-
-        // Check 15th word is inverted if f_flag is set
     }
 
     fn eval_compress<AB: SP1AirBuilder>(
