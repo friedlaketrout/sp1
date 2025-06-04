@@ -139,6 +139,8 @@ pub enum RiscvAirId {
     Global = 43,
     /// The byte chip.
     Byte = 44,
+    /// The Blake2f compress chip.
+    Blake2fCompress = 45,
 }
 
 impl RiscvAirId {
@@ -209,7 +211,8 @@ impl RiscvAirId {
                 RiscvAirId::Bn254FpOpAssign |
                 RiscvAirId::Bn254Fp2AddSubAssign |
                 RiscvAirId::Bn254Fp2MulAssign |
-                RiscvAirId::Bls12381Decompress
+                RiscvAirId::Bls12381Decompress |
+                RiscvAirId::Blake2fCompress
         )
     }
 

@@ -1,3 +1,4 @@
+mod blake2f_compress;
 mod ec;
 mod edwards;
 mod fptower;
@@ -9,6 +10,7 @@ mod uint256;
 
 use super::{MemoryLocalEvent, SyscallEvent};
 use crate::{deserialize_hashmap_as_vec, serialize_hashmap_as_vec, syscalls::SyscallCode};
+pub use blake2f_compress::*;
 pub use ec::*;
 pub use edwards::*;
 pub use fptower::*;
@@ -28,6 +30,8 @@ pub enum PrecompileEvent {
     ShaExtend(ShaExtendEvent),
     /// Sha256 compress precompile event.
     ShaCompress(ShaCompressEvent),
+    /// Blake2f compress precompile event.
+    Blake2fCompress(Blake2fCompressEvent),
     /// Keccak256 permute precompile event.
     KeccakPermute(KeccakPermuteEvent),
     /// Edwards curve add precompile event.
@@ -134,6 +138,9 @@ impl PrecompileLocalMemory for Vec<(SyscallEvent, PrecompileEvent)> {
                 PrecompileEvent::Bls12381Fp2Mul(e) | PrecompileEvent::Bn254Fp2Mul(e) => {
                     iterators.push(e.local_mem_access.iter());
                 }
+                PrecompileEvent::Blake2fCompress(e) => {
+                    iterators.push(e.local_mem_access.iter());
+                }
             }
         }
 
@@ -180,6 +187,7 @@ impl PrecompileEvents {
         syscall_event: SyscallEvent,
         event: PrecompileEvent,
     ) {
+        println!("{}", syscall_code);
         assert!(syscall_code.should_send() == 1);
         self.events.entry(syscall_code).or_default().push((syscall_event, event));
     }

@@ -44,7 +44,7 @@ pub fn run_test<P: MachineProver<BabyBearPoseidon2, RiscvAir<BabyBear>>>(
     });
     let public_values = SP1PublicValues::from(&runtime.state.public_values_stream);
 
-    let _ = run_test_core::<P>(runtime, inputs, Some(&shape_config), None)?;
+    let _ = run_test_core::<P>(runtime, inputs, None, None)?;
     Ok(public_values)
 }
 

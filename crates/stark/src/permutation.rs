@@ -128,6 +128,11 @@ pub fn generate_permutation_trace<F: PrimeField, EF: ExtensionField<F>>(
 
     if !local_sends.is_empty() || !local_receives.is_empty() {
         if let Some(prep) = preprocessed {
+            println!("--------------------------------");
+            println!("Prep height: {}", prep.height());
+            println!("Main height: {}", main.height());
+            println!("Perm trace height: {}", permutation_trace.height());
+            println!("--------------------------------");
             assert_eq!(
                 prep.height(),
                 main.height(),

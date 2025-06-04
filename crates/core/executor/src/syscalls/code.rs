@@ -58,6 +58,9 @@ pub enum SyscallCode {
     /// Executes the `SHA_COMPRESS` precompile.
     SHA_COMPRESS = 0x00_01_01_06,
 
+    /// Executes the `BLAKE2F_COMPRESS` precompile.
+    BLAKE2F_COMPRESS = 0x00_01_01_30,
+
     /// Executes the `ED_ADD` precompile.
     ED_ADD = 0x00_01_01_07,
 
@@ -202,6 +205,7 @@ impl SyscallCode {
             0x00_01_01_2C => SyscallCode::SECP256R1_ADD,
             0x00_00_01_2D => SyscallCode::SECP256R1_DOUBLE,
             0x00_00_01_2E => SyscallCode::SECP256R1_DECOMPRESS,
+            0x00_01_01_30 => SyscallCode::BLAKE2F_COMPRESS,
             _ => panic!("invalid syscall number: {value}"),
         }
     }
@@ -284,6 +288,7 @@ impl SyscallCode {
             SyscallCode::VERIFY_SP1_PROOF |
             SyscallCode::HINT_LEN |
             SyscallCode::HINT_READ => return None,
+            SyscallCode::BLAKE2F_COMPRESS => RiscvAirId::Blake2fCompress,
         })
     }
 }

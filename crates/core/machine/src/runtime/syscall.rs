@@ -56,6 +56,9 @@ pub enum SyscallCode {
     /// Executes the `SHA_COMPRESS` precompile.
     SHA_COMPRESS = 0x00_01_01_06,
 
+    // Executes the `BLAKE2F_COMPRESS` precompile.
+    BLAKE2F_COMPRESS = 0x00_01_01_30,
+
     /// Executes the `ED_ADD` precompile.
     ED_ADD = 0x00_01_01_07,
 
@@ -199,6 +202,7 @@ impl SyscallCode {
             0x00_01_01_2A => SyscallCode::BN254_FP2_SUB,
             0x00_01_01_2B => SyscallCode::BN254_FP2_MUL,
             0x00_00_01_1C => SyscallCode::BLS12381_DECOMPRESS,
+            0x00_01_01_30 => SyscallCode::BLAKE2F_COMPRESS,
             _ => panic!("invalid syscall number: {}", value),
         }
     }
@@ -353,6 +357,7 @@ pub fn default_syscall_map() -> HashMap<SyscallCode, Arc<dyn Syscall>> {
     syscall_map.insert(SyscallCode::HALT, Arc::new(SyscallHalt {}));
     syscall_map.insert(SyscallCode::SHA_EXTEND, Arc::new(ShaExtendChip::new()));
     syscall_map.insert(SyscallCode::SHA_COMPRESS, Arc::new(ShaCompressChip::new()));
+    // Blake2f todo: syscall_map.insert(SyscallCode::BLAKE2F_COMPRESS, Arc::new());
     syscall_map.insert(SyscallCode::ED_ADD, Arc::new(EdAddAssignChip::<Ed25519>::new()));
     syscall_map
         .insert(SyscallCode::ED_DECOMPRESS, Arc::new(EdDecompressChip::<Ed25519Parameters>::new()));
