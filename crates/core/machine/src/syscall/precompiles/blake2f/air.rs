@@ -97,6 +97,7 @@ impl Blake2fCompressChip {
         }
         builder.assert_one(inner_round_sum);
 
+        
         // Check proper transition for inner_round
         for i in 0..8 {
             builder.when_transition().when(local.inner_round[i]).assert_one(next.inner_round[(i + 1) % 8])

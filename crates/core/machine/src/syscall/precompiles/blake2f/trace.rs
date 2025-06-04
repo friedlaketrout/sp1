@@ -38,6 +38,9 @@ impl<F: PrimeField32> MachineAir<F> for Blake2fCompressChip {
         let rows = Vec::new();
 
         let mut wrapped_rows = Some(rows);
+        let mut inner_round = 0;
+        let mut outer_round = 0;
+
         for (_, event) in input.get_precompile_events(SyscallCode::BLAKE2F_COMPRESS) {
             let event = if let PrecompileEvent::Blake2fCompress(event) = event {
                 event
@@ -45,13 +48,18 @@ impl<F: PrimeField32> MachineAir<F> for Blake2fCompressChip {
                 unreachable!()
             };
             // blake2f todo: Event needs reference here, but other examples don't have it
-            self.event_to_rows(&event, &mut wrapped_rows, &mut Vec::new());
+            let [last_inner_round, last_outer_round] = self.event_to_rows(&event, &mut wrapped_rows, &mut Vec::new());
+            inner_round = last_inner_round;
+            outer_round = last_outer_round;
         }
         let mut rows = wrapped_rows.unwrap();
 
         println!("Rows: {:?}", rows.len());
-        println!("Rows: {:?}", rows);
 
+        /////////////////
+        // Padded rows //
+        /////////////////
+        
         let num_real_rows = rows.len();
 
         pad_rows_fixed(
@@ -59,12 +67,24 @@ impl<F: PrimeField32> MachineAir<F> for Blake2fCompressChip {
             || [F::zero(); NUM_BLAKE2F_COMPRESS_COLS],
             input.fixed_log2_rows::<F, _>(self),
         );
+        
+        // Set the octet_num and octet columns for the padded rows.
+        for row in rows[num_real_rows..].iter_mut() {
+            let cols: &mut Blake2fCompressColumns<F> = row.as_mut_slice().borrow_mut();
+            cols.outer_round[outer_round] = F::one();
+            cols.inner_round[inner_round] = F::one();
 
-        // Filler
-        let rows: Vec<[F; 64]> = Vec::new();
+            inner_round = (inner_round + 1) % 8;
+            if (inner_round == 0) {
+                outer_round = (outer_round + 1) % 10;
+            }
+            Self::set_round_columns(cols, inner_round, outer_round);
+        };
 
-        // Blake2f todo: Properly generate matrix
-        RowMajorMatrix::new(rows.into_iter().flatten().collect::<Vec<_>>(), 0)
+        println!("Rows: {:?}", rows.len());
+
+        // Convert the trace to a row major matrix.
+        RowMajorMatrix::new(rows.into_iter().flatten().collect::<Vec<_>>(), NUM_BLAKE2F_COMPRESS_COLS)
     }
 
     fn generate_dependencies(&self, input: &Self::Record, output: &mut Self::Record) {
@@ -105,7 +125,7 @@ impl Blake2fCompressChip {
         event: &Blake2fCompressEvent,
         rows: &mut Option<Vec<[F; NUM_BLAKE2F_COMPRESS_COLS]>>,
         blu: &mut impl ByteRecord,
-    ) {
+    ) -> [usize; 2] {
         println!("Generating rows for Blake2fCompress");
 
         let og_h = event.h;
@@ -155,7 +175,7 @@ impl Blake2fCompressChip {
 
             // Increment rounds
             inner_round = (inner_round + 1) % 8;
-            if (inner_round == 0) {
+            if inner_round == 0 {
                 outer_round = (outer_round + 1) % 10;
             }
             Self::set_round_columns(cols, inner_round, outer_round);
@@ -188,7 +208,7 @@ impl Blake2fCompressChip {
 
         // Increment rounds
         inner_round = (inner_round + 1) % 8;
-        if (inner_round == 0) {
+        if inner_round == 0 {
             outer_round = (outer_round + 1) % 10;
         }
         Self::set_round_columns(cols, inner_round, outer_round);
@@ -202,25 +222,43 @@ impl Blake2fCompressChip {
         if rows.as_ref().is_some() {
             rows.as_mut().unwrap().push(row);
         }
+
+        [inner_round, outer_round]
     }
 
     fn set_v_values<F: PrimeField32>(cols: &mut Blake2fCompressColumns<F>, v_mutation: &[u64; 16]) {
-        cols.v0 = F::from_canonical_u64(v_mutation[0]);
-        cols.v1 = F::from_canonical_u64(v_mutation[1]);
-        cols.v2 = F::from_canonical_u64(v_mutation[2]);
-        cols.v3 = F::from_canonical_u64(v_mutation[3]);
-        cols.v4 = F::from_canonical_u64(v_mutation[4]);
-        cols.v5 = F::from_canonical_u64(v_mutation[5]);
-        cols.v6 = F::from_canonical_u64(v_mutation[6]);
-        cols.v7 = F::from_canonical_u64(v_mutation[7]);
-        cols.v8 = F::from_canonical_u64(v_mutation[8]);
-        cols.v9 = F::from_canonical_u64(v_mutation[9]);
-        cols.v10 = F::from_canonical_u64(v_mutation[10]);
-        cols.v11 = F::from_canonical_u64(v_mutation[11]);
-        cols.v12 = F::from_canonical_u64(v_mutation[12]);
-        cols.v13 = F::from_canonical_u64(v_mutation[13]);
-        cols.v14 = F::from_canonical_u64(v_mutation[14]);
-        cols.v15 = F::from_canonical_u64(v_mutation[15]);
+        let v0_sliced = u64_slice_to_words_le::<2>(&[v_mutation[0]]);
+        cols.v0 = [Word::from(v0_sliced[0]), Word::from(v0_sliced[1])];
+        let v1_sliced = u64_slice_to_words_le::<2>(&[v_mutation[1]]);
+        cols.v1 = [Word::from(v1_sliced[0]), Word::from(v1_sliced[1])];
+        let v2_sliced = u64_slice_to_words_le::<2>(&[v_mutation[2]]);
+        cols.v2 = [Word::from(v2_sliced[0]), Word::from(v2_sliced[1])];
+        let v3_sliced = u64_slice_to_words_le::<2>(&[v_mutation[3]]);
+        cols.v3 = [Word::from(v3_sliced[0]), Word::from(v3_sliced[1])];
+        let v4_sliced = u64_slice_to_words_le::<2>(&[v_mutation[4]]);
+        cols.v4 = [Word::from(v4_sliced[0]), Word::from(v4_sliced[1])];
+        let v5_sliced = u64_slice_to_words_le::<2>(&[v_mutation[5]]);
+        cols.v5 = [Word::from(v5_sliced[0]), Word::from(v5_sliced[1])];
+        let v6_sliced = u64_slice_to_words_le::<2>(&[v_mutation[6]]);
+        cols.v6 = [Word::from(v6_sliced[0]), Word::from(v6_sliced[1])];
+        let v7_sliced = u64_slice_to_words_le::<2>(&[v_mutation[7]]);
+        cols.v7 = [Word::from(v7_sliced[0]), Word::from(v7_sliced[1])];
+        let v8_sliced = u64_slice_to_words_le::<2>(&[v_mutation[8]]);
+        cols.v8 = [Word::from(v8_sliced[0]), Word::from(v8_sliced[1])];
+        let v9_sliced = u64_slice_to_words_le::<2>(&[v_mutation[9]]);
+        cols.v9 = [Word::from(v9_sliced[0]), Word::from(v9_sliced[1])];
+        let v10_sliced = u64_slice_to_words_le::<2>(&[v_mutation[10]]);
+        cols.v10 = [Word::from(v10_sliced[0]), Word::from(v10_sliced[1])];
+        let v11_sliced = u64_slice_to_words_le::<2>(&[v_mutation[11]]);
+        cols.v11 = [Word::from(v11_sliced[0]), Word::from(v11_sliced[1])];
+        let v12_sliced = u64_slice_to_words_le::<2>(&[v_mutation[12]]);
+        cols.v12 = [Word::from(v12_sliced[0]), Word::from(v12_sliced[1])];
+        let v13_sliced = u64_slice_to_words_le::<2>(&[v_mutation[13]]);
+        cols.v13 = [Word::from(v13_sliced[0]), Word::from(v13_sliced[1])];
+        let v14_sliced = u64_slice_to_words_le::<2>(&[v_mutation[14]]);
+        cols.v14 = [Word::from(v14_sliced[0]), Word::from(v14_sliced[1])];
+        let v15_sliced = u64_slice_to_words_le::<2>(&[v_mutation[15]]);
+        cols.v15 = [Word::from(v15_sliced[0]), Word::from(v15_sliced[1])];
     }
 
     fn set_round_columns<F: PrimeField32>(cols: &mut Blake2fCompressColumns<F>, inner_round: usize, outer_round: usize) {
@@ -241,4 +279,16 @@ impl Blake2fCompressChip {
         columns[true_column] = F::one();
         columns
     }
+}
+
+/// Converts a slice of `u64` values into a `Vec<u32>` maintaining byte ordering.
+fn u64_slice_to_words_le<const N: usize>(words: &[u64]) -> [u32; N] {
+    assert_eq!(words.len(), N / 2, "Expected {} u64s for {} u32s", N / 2, N);
+
+    let mut result = [0u32; N];
+    for i in 0..(N / 2) {
+        result[2 * i] = (words[i] >> 32) as u32; // high 32 bits
+        result[2 * i + 1] = words[i] as u32; // low 32 bits
+    }
+    result
 }

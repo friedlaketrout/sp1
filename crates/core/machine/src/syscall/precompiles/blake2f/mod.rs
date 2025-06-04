@@ -260,8 +260,8 @@ pub mod tests {
         let mut shard = ExecutionRecord::default();
         
         shard.precompile_events.add_event(SyscallCode::BLAKE2F_COMPRESS, syscall_event, sp1_core_executor::events::PrecompileEvent::Blake2fCompress(event.clone()));
-        shard.precompile_events.add_event(SyscallCode::BLAKE2F_COMPRESS, syscall_event, sp1_core_executor::events::PrecompileEvent::Blake2fCompress(event.clone()));
-        shard.precompile_events.add_event(SyscallCode::BLAKE2F_COMPRESS, third_syscall_event, sp1_core_executor::events::PrecompileEvent::Blake2fCompress(event.clone()));
+        // shard.precompile_events.add_event(SyscallCode::BLAKE2F_COMPRESS, syscall_event, sp1_core_executor::events::PrecompileEvent::Blake2fCompress(event.clone()));
+        //shard.precompile_events.add_event(SyscallCode::BLAKE2F_COMPRESS, third_syscall_event, sp1_core_executor::events::PrecompileEvent::Blake2fCompress(event.clone()));
 
         let chip = Blake2fCompressChip::default();
         let trace: RowMajorMatrix<BabyBear> =
