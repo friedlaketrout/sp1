@@ -105,6 +105,8 @@ impl Syscall for Blake2fCompressSyscall {
 
         let syscall_event =
             rt.rt.syscall_event(start_clk, None, None, syscall_code, arg1, arg2, rt.next_pc);
+        println!("Syscall event: {:?}", syscall_event);
+
         rt.add_precompile_event(syscall_code, syscall_event, event);
 
         None
