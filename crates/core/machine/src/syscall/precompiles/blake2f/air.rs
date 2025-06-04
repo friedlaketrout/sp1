@@ -1,8 +1,9 @@
 use std::borrow::Borrow;
-use p3_air::{Air, BaseAir};
+use p3_air::{Air, BaseAir, AirBuilder};
 use p3_field::AbstractField;
 use p3_matrix::Matrix;
 use sp1_stark::air::SP1AirBuilder;
+use sp1_stark::air::BaseAirBuilder;
 
 use crate::syscall::precompiles::blake2f::columns::Blake2fCompressColumns;
 
@@ -71,6 +72,131 @@ where
         let main = builder.main();
         let (local, next) = (main.row_slice(0), main.row_slice(1));
         let local: &Blake2fCompressColumns<AB::Var> = (*local).borrow();
-        builder.assert_bool(local.f_flag);
+        let next: &Blake2fCompressColumns<AB::Var> = (*next).borrow();
+
+        self.eval_control_flow_flags(builder, local, next);
+    }
+}
+
+impl Blake2fCompressChip {
+    fn eval_control_flow_flags<AB: SP1AirBuilder>(
+        &self,
+        builder: &mut AB,
+        local: &Blake2fCompressColumns<AB::Var>,
+        next: &Blake2fCompressColumns<AB::Var>,
+    ) {
+        // Check all of the inner_round columns are bool
+        for i in 0..8 {
+            builder.assert_bool(local.inner_round[i]);
+        }
+
+        // Check exactly one of the inner_round columns is true
+        let mut inner_round_sum = AB::Expr::zero();
+        for i in 0..8 {
+            inner_round_sum = inner_round_sum.clone() + local.inner_round[i].into();
+        }
+        builder.assert_one(inner_round_sum);
+
+        // Check proper transition for inner_round
+        for i in 0..8 {
+            builder.when_transition().when(local.inner_round[i]).assert_one(next.inner_round[(i + 1) % 8])
+        }
+
+        // Check all of the outer_round columns are bool
+        for i in 0..10 {
+            builder.assert_bool(local.outer_round[i]);
+        }
+
+        // Check exactly one of the outer_round columns is true
+        let mut outer_round_sum = AB::Expr::zero();
+        for i in 0..10 {
+            outer_round_sum = outer_round_sum.clone() + local.outer_round[i].into();
+        }
+        builder.assert_one(outer_round_sum);
+
+        // Check proper transition for outer_round
+        // If inner round is not last, outer round should be the same
+        for i in 0..10 {
+            builder
+                .when_transition()
+                .when_not(local.inner_round[7])
+                .assert_eq(local.outer_round[i], next.outer_round[i]);
+        }
+
+        // If inner round is last, outer round should increment mod 10
+        for i in 0..10 {
+            builder
+                .when_transition()
+                .when(local.inner_round[7])
+                .assert_eq(local.outer_round[i], next.outer_round[(i + 1) % 10]);
+        }
+
+        // Check that first row inner_round is set properly to wrap around to zero
+        builder.when_first_row().assert_one(local.inner_round[7]);
+
+        // Check that first row outer_round is set properly to wrap around to zero
+        builder.when_first_row().assert_one(local.outer_round[9]);
+    }
+
+    fn eval_first_row<AB: SP1AirBuilder>(
+        &self,
+        builder: &mut AB,
+        local: &Blake2fCompressColumns<AB::Var>,
+        next: &Blake2fCompressColumns<AB::Var>,
+    ) {
+        // Check first eight words match h
+
+        // Check next 4 words match IV
+
+        // Check last word matches IV
+
+        // Check 13th and 14th word properly handle offset
+
+        // Check 15th word is inverted if f_flag is set
+    }
+
+    fn eval_compress<AB: SP1AirBuilder>(
+        &self,
+        builder: &mut AB,
+        local: &Blake2fCompressColumns<AB::Var>,
+        next: &Blake2fCompressColumns<AB::Var>,
+    ) {
+        // Get correct SIGMA vector
+        // Start with 0 vector, fold sum each vector multiplied by associated outer_round boolean
+        let mut correct_sigma = [0u64; 16];
+        for i in 0..10 {
+            // Take outer_round[i] * SIGMA[i]
+            // Add into v
+            // outer_round is a sparse vector, only one element is true
+        }
+
+        // Get correct SIGMA pair
+        let mut correct_sigma_pair = [0u64; 2];
+        // Get correct XY indices
+        // Start with (0,0) fold sum each tuple multipled by associated inner_round boolean
+        for i in 0..8 {
+            // Take inner_round[i] * XY_INDICES[i]
+            // Add into correct_sigma_pair
+            // Take indices pair and pull values from correct_sigma
+            // inner_round is a sparse vector, only one element is true
+        }
+
+        // Get correct ABCD
+        let mut correct_abcd = [0u64; 4];
+        // Start with (0,0,0,0) fold sum each tuple multipled by associated inner_round boolean
+        for i in 0..8 {
+            // Take inner_round[i] * ABCD[i]
+            // Add into correct_abcd
+            // inner_round is a sparse vector, only one element is true
+        }
+    }
+
+    fn eval_final_row<AB: SP1AirBuilder>(
+        &self,
+        builder: &mut AB,
+        local: &Blake2fCompressColumns<AB::Var>,
+        next: &Blake2fCompressColumns<AB::Var>,
+    ) {
+
     }
 }

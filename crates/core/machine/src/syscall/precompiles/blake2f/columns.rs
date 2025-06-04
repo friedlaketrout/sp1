@@ -9,34 +9,20 @@ pub struct  Blake2fCompressColumns<T> {
     /// Inputs.
     pub shard: T,
     pub clk: T,
-    pub w_ptr: T,
+    pub base_ptr: T,
 
     /// Column control flows
     /// First row
     pub is_first_row: T,
-    pub is_second_row: T,
 
-    /// Top level round index, selects SIGMA mod 10
-    pub is_round_mod1: T,
-    pub is_round_mod2: T,
-    pub is_round_mod3: T,
-    pub is_round_mod4: T,
-    pub is_round_mod5: T,
-    pub is_round_mod6: T,
-    pub is_round_mod7: T,
-    pub is_round_mod8: T,
-    pub is_round_mod9: T,
-    pub is_round_mod10: T,
+    /// Which cycle within the octet we are currently processing.
+    pub inner_round: [T; 8],
 
-    /// Subround index, selects a,b,c,d,x,y
-    pub is_subround_mod1: T,
-    pub is_subround_mod2: T,
-    pub is_subround_mod3: T,
-    pub is_subround_mod4: T,
-    pub is_subround_mod5: T,
-    pub is_subround_mod6: T,
-    pub is_subround_mod7: T,
-    pub is_subround_mod8: T,
+    /// This will specify which octet we are currently processing.
+    ///  - The first octet is for initialize.
+    ///  - The next 8 octets are for compress.
+    ///  - The last octet is for finalize.
+    pub outer_round: [T; 10],
 
     /// Last row
     pub is_last_row: T,

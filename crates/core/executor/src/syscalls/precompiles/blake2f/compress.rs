@@ -17,7 +17,7 @@ const IV: [u64; 8] = [
     0x5be0cd19137e2179,
 ];
 
-const SIGMA: [[usize; 16]; 12] = [
+const SIGMA: [[usize; 16]; 10] = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
     [11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4],
@@ -28,8 +28,6 @@ const SIGMA: [[usize; 16]; 12] = [
     [13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10],
     [6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5],
     [10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0],
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
 ];
 
 impl Syscall for Blake2fCompressSyscall {
@@ -119,28 +117,24 @@ pub fn compress(rounds: u32, h: [u64; 8], m: [u64; 16], t0: u64, t1: u64, f: boo
 
     // Build internal state
     let mut v = [0u64; 16];
-    v_mutations.push(v);
 
     // Take h state
     v[..8].copy_from_slice(&h);
-    v_mutations.push(v);
 
     // Second half from IV
     v[8..].copy_from_slice(&IV);
-    v_mutations.push(v);
 
     // XOR in offsets
     v[12] ^= t0;
-    v_mutations.push(v);
 
     v[13] ^= t1;
-    v_mutations.push(v);
 
     // If final round, invert word
     if f {
         v[14] = !v[14];
-        v_mutations.push(v);
     }
+    // First mutation, used to check first row of AIR
+    v_mutations.push(v);
 
     for i in 0..rounds as usize {
         let s = &SIGMA[i % 10];
@@ -160,6 +154,7 @@ pub fn compress(rounds: u32, h: [u64; 8], m: [u64; 16], t0: u64, t1: u64, f: boo
         // In reality, this result is actually little endian
         out[i] = (h[i] ^ v[i] ^ v[i + 8]).to_be();
     }
+    v_mutations.push(v);
     out
 }
 
@@ -168,21 +163,14 @@ pub fn compress(rounds: u32, h: [u64; 8], m: [u64; 16], t0: u64, t1: u64, f: boo
 // G mixing function, see: https://datatracker.ietf.org/doc/html/rfc7693#section-3.1
 fn G(v: &mut [u64; 16], a: usize, b: usize, c: usize, d: usize, x: u64, y: u64, v_mutations: &mut Vec<[u64; 16]>) {
     v[a] = v[a].wrapping_add(v[b]).wrapping_add(x);
-    v_mutations.push(v.clone());
     v[d] = (v[d] ^ v[a]).rotate_right(32);
-    v_mutations.push(v.clone());
     v[c] = v[c].wrapping_add(v[d]);
-    v_mutations.push(v.clone());
     v[b] = (v[b] ^ v[c]).rotate_right(24);
-    v_mutations.push(v.clone());
     v[a] = v[a].wrapping_add(v[b]).wrapping_add(y);
-    v_mutations.push(v.clone());
     v[d] = (v[d] ^ v[a]).rotate_right(16);
-    v_mutations.push(v.clone());
     v[c] = v[c].wrapping_add(v[d]);
-    v_mutations.push(v.clone());
     v[b] = (v[b] ^ v[c]).rotate_right(63);
-    v_mutations.push(v.clone());
+    v_mutations.push(*v);
 }
 
 /// Convert `2 * len` u32s into a `[u64; len]` assuming little-endian encoding.
