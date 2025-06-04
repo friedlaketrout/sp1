@@ -30,6 +30,8 @@ pub struct Blake2fCompressEvent {
     pub f: bool,
     /// Compression output
     pub result: [u64; 8],
+    /// State mutations
+    pub v_mutations: Vec<[u64; 16]>,
     /// Read records
     pub read_records: Vec<MemoryReadRecord>, // (1 + 16 + 32 + 4 + 1) = 54 u32 reads
     /// Write records

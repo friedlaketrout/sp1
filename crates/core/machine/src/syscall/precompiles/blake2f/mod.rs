@@ -20,6 +20,8 @@ pub mod tests {
     use sp1_core_executor::Executor;
     use sp1_stark::SP1CoreOpts;
 
+    use crate::utils;
+
     use crate::{
         io::SP1Stdin,
         utils::{run_test, setup_logger},
@@ -31,5 +33,13 @@ pub mod tests {
         let program = Program::from(BLAKE2F_COMPRESS_ELF).unwrap();
         let mut runtime = Executor::new(program, SP1CoreOpts::default());
         runtime.run().unwrap();
+    }
+
+    #[test]
+    fn test_blake2f_compress_program_prove() {
+        utils::setup_logger();
+        let program = Program::from(BLAKE2F_COMPRESS_ELF).unwrap();
+        let stdin = SP1Stdin::new();
+        utils::run_test::<CpuProver<_, _>>(program, stdin).unwrap();
     }
 }

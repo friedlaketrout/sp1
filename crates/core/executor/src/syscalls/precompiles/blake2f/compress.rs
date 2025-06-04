@@ -74,7 +74,8 @@ impl Syscall for Blake2fCompressSyscall {
         read_records.push(f_record);
 
         // Perform actual blake2f compress
-        let result = compress(rounds, h, m, t0, t1, f);
+        let mut v_mutations: Vec<[u64; 16]> = Vec::new();
+        let result = compress(rounds, h, m, t0, t1, f, &mut v_mutations);
         println!("Calculated Result: {}", result.iter().map(|x| format!("{:016x}", x)).collect::<Vec<_>>().join(""));
 
         // Split back into u32 words
@@ -98,6 +99,7 @@ impl Syscall for Blake2fCompressSyscall {
             t1,
             f,
             result,
+            v_mutations,
             read_records,
             write_records,
             local_mem_access: rt.postprocess(),
@@ -113,34 +115,43 @@ impl Syscall for Blake2fCompressSyscall {
 
 // Core compression function, see https://datatracker.ietf.org/doc/html/rfc7693#section-3.2
 #[allow(clippy::many_single_char_names)]
-pub fn compress(rounds: u32, h: [u64; 8], m: [u64; 16], t0: u64, t1: u64, f: bool) -> [u64; 8] {
+pub fn compress(rounds: u32, h: [u64; 8], m: [u64; 16], t0: u64, t1: u64, f: bool, v_mutations: &mut Vec<[u64; 16]>) -> [u64; 8] {
+
     // Build internal state
     let mut v = [0u64; 16];
+    v_mutations.push(v);
 
     // Take h state
     v[..8].copy_from_slice(&h);
+    v_mutations.push(v);
+
     // Second half from IV
     v[8..].copy_from_slice(&IV);
+    v_mutations.push(v);
 
     // XOR in offsets
     v[12] ^= t0;
+    v_mutations.push(v);
+
     v[13] ^= t1;
+    v_mutations.push(v);
 
     // If final round, invert word
     if f {
         v[14] = !v[14];
+        v_mutations.push(v);
     }
 
     for i in 0..rounds as usize {
         let s = &SIGMA[i % 10];
-        G(&mut v, 0, 4, 8, 12, m[s[0]], m[s[1]]);
-        G(&mut v, 1, 5, 9, 13, m[s[2]], m[s[3]]);
-        G(&mut v, 2, 6, 10, 14, m[s[4]], m[s[5]]);
-        G(&mut v, 3, 7, 11, 15, m[s[6]], m[s[7]]);
-        G(&mut v, 0, 5, 10, 15, m[s[8]], m[s[9]]);
-        G(&mut v, 1, 6, 11, 12, m[s[10]], m[s[11]]);
-        G(&mut v, 2, 7, 8, 13, m[s[12]], m[s[13]]);
-        G(&mut v, 3, 4, 9, 14, m[s[14]], m[s[15]]);
+        G(&mut v, 0, 4, 8, 12, m[s[0]], m[s[1]], v_mutations);
+        G(&mut v, 1, 5, 9, 13, m[s[2]], m[s[3]], v_mutations);
+        G(&mut v, 2, 6, 10, 14, m[s[4]], m[s[5]], v_mutations);
+        G(&mut v, 3, 7, 11, 15, m[s[6]], m[s[7]], v_mutations);
+        G(&mut v, 0, 5, 10, 15, m[s[8]], m[s[9]], v_mutations);
+        G(&mut v, 1, 6, 11, 12, m[s[10]], m[s[11]], v_mutations);
+        G(&mut v, 2, 7, 8, 13, m[s[12]], m[s[13]], v_mutations);
+        G(&mut v, 3, 4, 9, 14, m[s[14]], m[s[15]], v_mutations);
     }
 
     let mut out = [0u64; 8];
@@ -155,15 +166,23 @@ pub fn compress(rounds: u32, h: [u64; 8], m: [u64; 16], t0: u64, t1: u64, f: boo
 #[inline(always)]
 #[allow(clippy::many_single_char_names, non_snake_case)]
 // G mixing function, see: https://datatracker.ietf.org/doc/html/rfc7693#section-3.1
-fn G(v: &mut [u64; 16], a: usize, b: usize, c: usize, d: usize, x: u64, y: u64) {
+fn G(v: &mut [u64; 16], a: usize, b: usize, c: usize, d: usize, x: u64, y: u64, v_mutations: &mut Vec<[u64; 16]>) {
     v[a] = v[a].wrapping_add(v[b]).wrapping_add(x);
+    v_mutations.push(v.clone());
     v[d] = (v[d] ^ v[a]).rotate_right(32);
+    v_mutations.push(v.clone());
     v[c] = v[c].wrapping_add(v[d]);
+    v_mutations.push(v.clone());
     v[b] = (v[b] ^ v[c]).rotate_right(24);
+    v_mutations.push(v.clone());
     v[a] = v[a].wrapping_add(v[b]).wrapping_add(y);
+    v_mutations.push(v.clone());
     v[d] = (v[d] ^ v[a]).rotate_right(16);
+    v_mutations.push(v.clone());
     v[c] = v[c].wrapping_add(v[d]);
+    v_mutations.push(v.clone());
     v[b] = (v[b] ^ v[c]).rotate_right(63);
+    v_mutations.push(v.clone());
 }
 
 /// Convert `2 * len` u32s into a `[u64; len]` assuming little-endian encoding.
@@ -189,14 +208,14 @@ fn words_to_u64_le<const N: usize>(words: &[u32]) -> [u64; N] {
     result
 }
 
-/// Converts a slice of `u64` values into a `Vec<u32>` (little-endian: low 32 bits first).
+/// Converts a slice of `u64` values into a `Vec<u32>` maintaining byte ordering.
 fn u64_slice_to_words_le<const N: usize>(words: &[u64]) -> [u32; N] {
     assert_eq!(words.len(), N / 2, "Expected {} u64s for {} u32s", N / 2, N);
 
     let mut result = [0u32; N];
     for i in 0..(N / 2) {
-        result[2 * i] = words[i] as u32; // low 32 bits
-        result[2 * i + 1] = (words[i] >> 32) as u32; // high 32 bits
+        result[2 * i] = (words[i] >> 32) as u32; // high 32 bits
+        result[2 * i + 1] = words[i] as u32; // low 32 bits
     }
     result
 }
