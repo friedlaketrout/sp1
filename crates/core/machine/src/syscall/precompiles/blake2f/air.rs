@@ -4,7 +4,10 @@ use p3_field::AbstractField;
 use p3_matrix::Matrix;
 use sp1_stark::air::SP1AirBuilder;
 use sp1_stark::air::BaseAirBuilder;
+use sp1_stark::Word;
+use p3_field::PrimeField32;
 
+use crate::air::WordAirBuilder;
 use crate::syscall::precompiles::blake2f::columns::Blake2fCompressColumns;
 
 use super::columns::NUM_BLAKE2F_COMPRESS_COLS;
@@ -75,6 +78,7 @@ where
         let next: &Blake2fCompressColumns<AB::Var> = (*next).borrow();
 
         self.eval_control_flow_flags(builder, local, next);
+        self.eval_first_row(builder, local, next);
     }
 }
 
@@ -148,10 +152,29 @@ impl Blake2fCompressChip {
         // Check first eight words match h
 
         // Check next 4 words match IV
+        let [iv_word_0_0, iv_word_0_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[0]);
+        builder.when_first_row().assert_word_eq(local.v8[0], iv_word_0_0);
+        builder.when_first_row().assert_word_eq(local.v8[1], iv_word_0_1);
+
+        let [iv_word_1_0, iv_word_1_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[1]);
+        builder.when_first_row().assert_word_eq(local.v9[0], iv_word_1_0);
+        builder.when_first_row().assert_word_eq(local.v9[1], iv_word_1_1);
+
+        let [iv_word_2_0, iv_word_2_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[2]);
+        builder.when_first_row().assert_word_eq(local.v10[0], iv_word_2_0);
+        builder.when_first_row().assert_word_eq(local.v10[1], iv_word_2_1);
+
+        let [iv_word_3_0, iv_word_3_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[3]);
+        builder.when_first_row().assert_word_eq(local.v11[0], iv_word_3_0);
+        builder.when_first_row().assert_word_eq(local.v11[1], iv_word_3_1);
 
         // Check last word matches IV
+        let [iv_word_7_0, iv_word_7_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[7]);
+        builder.when_first_row().assert_word_eq(local.v15[0], iv_word_7_0);
+        builder.when_first_row().assert_word_eq(local.v15[1], iv_word_7_1);
 
         // Check 13th and 14th word properly handle offset
+        
 
         // Check 15th word is inverted if f_flag is set
     }
@@ -200,4 +223,20 @@ impl Blake2fCompressChip {
     ) {
 
     }
+}
+
+fn u64_to_word_pair<T: AbstractField>(num: u64) -> [Word<T>; 2] {
+    let [w1, w2] = u64_slice_to_words_le::<2>(&[num]);
+    [Word::from(w1), Word::from(w2)]
+}
+/// Converts a slice of `u64` values into a `Vec<u32>` maintaining byte ordering.
+fn u64_slice_to_words_le<const N: usize>(words: &[u64]) -> [u32; N] {
+    assert_eq!(words.len(), N / 2, "Expected {} u64s for {} u32s", N / 2, N);
+
+    let mut result = [0u32; N];
+    for i in 0..(N / 2) {
+        result[2 * i] = (words[i] >> 32) as u32; // high 32 bits
+        result[2 * i + 1] = words[i] as u32; // low 32 bits
+    }
+    result
 }
