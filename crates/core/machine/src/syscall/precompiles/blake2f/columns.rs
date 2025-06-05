@@ -1,5 +1,6 @@
 use sp1_derive::AlignedBorrow;
 use sp1_stark::Word;
+use crate::operations::XorOperation;
 
 pub const NUM_BLAKE2F_COMPRESS_COLS: usize = size_of::<Blake2fCompressColumns<u8>>();
 
@@ -29,7 +30,7 @@ pub struct  Blake2fCompressColumns<T> {
 
     pub v: [[Word<T>; 2]; 16],
 
-    pub final_v_xor: [[Word<T>; 2]; 8],
+    pub final_v_xor: [[XorOperation<T>; 2]; 8],
 
     /// Final block flag (used as a selector/flag in AIR)
     pub f_flag: T,

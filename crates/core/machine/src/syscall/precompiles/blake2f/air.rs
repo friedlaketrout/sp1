@@ -9,6 +9,7 @@ use p3_field::PrimeField32;
 
 use crate::air::WordAirBuilder;
 use crate::syscall::precompiles::blake2f::columns::Blake2fCompressColumns;
+use crate::operations::XorOperation;
 
 use super::columns::NUM_BLAKE2F_COMPRESS_COLS;
 use super::Blake2fCompressChip;
@@ -88,6 +89,7 @@ where
         self.eval_control_flow_flags(builder, local, next);
         self.eval_first_row(builder, local, next);
         self.eval_compress(builder, local, next);
+        self.eval_final_row(builder, local, next);
     }
 }
 
@@ -280,7 +282,25 @@ impl Blake2fCompressChip {
         local: &Blake2fCompressColumns<AB::Var>,
         next: &Blake2fCompressColumns<AB::Var>,
     ) {
+        // Check final v_xor
+        println!("is_last_row: {:?}", local.is_last_row.into());
+        for i in 0..8 {
+            XorOperation::<AB::F>::eval(
+                builder,
+                local.v[i][0],
+                local.v[i + 8][0],
+                local.final_v_xor[i][0],
+                local.is_last_row,
+            );
 
+            XorOperation::<AB::F>::eval(
+                builder,
+                local.v[i][1],
+                local.v[i + 8][1],
+                local.final_v_xor[i][1],
+                local.is_last_row,
+            );
+        }
     }
 }
 

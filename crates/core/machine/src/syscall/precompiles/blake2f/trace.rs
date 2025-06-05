@@ -6,7 +6,7 @@ use sp1_core_executor::{
     syscalls::SyscallCode,
     ExecutionRecord, Program,
 };
-use crate::utils::pad_rows_fixed;
+use crate::{operations::XorOperation, utils::pad_rows_fixed};
 use p3_maybe_rayon::prelude::ParallelSlice;
 use p3_maybe_rayon::prelude::ParallelIterator;
 use hashbrown::HashMap;
@@ -215,11 +215,9 @@ impl Blake2fCompressChip {
         Self::set_round_columns(cols, inner_round, outer_round);
 
         let final_mutation = event.mutations[event.mutations.len() - 1];
-        Self::set_v_values(cols, &final_mutation.v);
 
-        let final_v_xor = final_mutation.final_v_xor.unwrap();
-        println!("Final v xor: {:?}", final_v_xor);
-        Self::set_final_v_xor(cols, &final_v_xor);
+        Self::set_v_values(cols, &final_mutation.v);
+        Self::set_final_v_xor(cols, &final_mutation.v, blu);
 
         cols.f_flag = F::from_bool(event.f);
 
@@ -231,62 +229,21 @@ impl Blake2fCompressChip {
         [inner_round, outer_round]
     }
 
-    fn set_final_v_xor<F: PrimeField32>(cols: &mut Blake2fCompressColumns<F>, final_v_xor: &[u64; 8]) {
-        let v0_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[0]]);
-        let v0_pair = [Word::from(v0_sliced[0]), Word::from(v0_sliced[1])];
-        let v1_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[1]]);
-        let v1_pair = [Word::from(v1_sliced[0]), Word::from(v1_sliced[1])];
-        let v2_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[2]]);
-        let v2_pair = [Word::from(v2_sliced[0]), Word::from(v2_sliced[1])];
-        let v3_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[3]]);
-        let v3_pair = [Word::from(v3_sliced[0]), Word::from(v3_sliced[1])];
-        let v4_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[4]]);
-        let v4_pair = [Word::from(v4_sliced[0]), Word::from(v4_sliced[1])];
-        let v5_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[5]]);
-        let v5_pair = [Word::from(v5_sliced[0]), Word::from(v5_sliced[1])];
-        let v6_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[6]]);
-        let v6_pair = [Word::from(v6_sliced[0]), Word::from(v6_sliced[1])];
-        let v7_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[7]]);
-        let v7_pair = [Word::from(v7_sliced[0]), Word::from(v7_sliced[1])];
-
-        cols.final_v_xor = [v0_pair, v1_pair, v2_pair, v3_pair, v4_pair, v5_pair, v6_pair, v7_pair];
+    // Takes final_v_xor u64s and converts them to a vector of pairs of words
+    fn set_final_v_xor<F: PrimeField32>(cols: &mut Blake2fCompressColumns<F>, final_v_mutation: &[u64; 16], blu: &mut impl ByteRecord) {
+        let final_v_mutation_pairs = Self::get_pair_u32s_from_u64s::<16>(final_v_mutation);
+        // There's 16 elements of two word pairs in final v mutation
+        // Need to check xor of each pair with the corresponding pair + 8
+        final_v_mutation_pairs[0..8].iter().enumerate().for_each(|(i, pair)| {
+            // blake2f todo: Even if indices are changed, still outputs correct
+            cols.final_v_xor[i][0].populate(blu, final_v_mutation_pairs[i][0], final_v_mutation_pairs[i + 8][0]);
+            cols.final_v_xor[i][1].populate(blu, final_v_mutation_pairs[i][1], final_v_mutation_pairs[i + 8][1]);
+        });
     }
 
+    // Takes v_mutation u64s and converts them to a vector of pairs of words
     fn set_v_values<F: PrimeField32>(cols: &mut Blake2fCompressColumns<F>, v_mutation: &[u64; 16]) {
-        let v0_sliced = u64_slice_to_words_le::<2>(&[v_mutation[0]]);
-        let v0_pair = [Word::from(v0_sliced[0]), Word::from(v0_sliced[1])];
-        let v1_sliced = u64_slice_to_words_le::<2>(&[v_mutation[1]]);
-        let v1_pair = [Word::from(v1_sliced[0]), Word::from(v1_sliced[1])];
-        let v2_sliced = u64_slice_to_words_le::<2>(&[v_mutation[2]]);
-        let v2_pair = [Word::from(v2_sliced[0]), Word::from(v2_sliced[1])];
-        let v3_sliced = u64_slice_to_words_le::<2>(&[v_mutation[3]]);
-        let v3_pair = [Word::from(v3_sliced[0]), Word::from(v3_sliced[1])];
-        let v4_sliced = u64_slice_to_words_le::<2>(&[v_mutation[4]]);
-        let v4_pair = [Word::from(v4_sliced[0]), Word::from(v4_sliced[1])];
-        let v5_sliced = u64_slice_to_words_le::<2>(&[v_mutation[5]]);
-        let v5_pair = [Word::from(v5_sliced[0]), Word::from(v5_sliced[1])];
-        let v6_sliced = u64_slice_to_words_le::<2>(&[v_mutation[6]]);
-        let v6_pair = [Word::from(v6_sliced[0]), Word::from(v6_sliced[1])];
-        let v7_sliced = u64_slice_to_words_le::<2>(&[v_mutation[7]]);
-        let v7_pair = [Word::from(v7_sliced[0]), Word::from(v7_sliced[1])];
-        let v8_sliced = u64_slice_to_words_le::<2>(&[v_mutation[8]]);
-        let v8_pair = [Word::from(v8_sliced[0]), Word::from(v8_sliced[1])];
-        let v9_sliced = u64_slice_to_words_le::<2>(&[v_mutation[9]]);
-        let v9_pair = [Word::from(v9_sliced[0]), Word::from(v9_sliced[1])];
-        let v10_sliced = u64_slice_to_words_le::<2>(&[v_mutation[10]]);
-        let v10_pair = [Word::from(v10_sliced[0]), Word::from(v10_sliced[1])];
-        let v11_sliced = u64_slice_to_words_le::<2>(&[v_mutation[11]]);
-        let v11_pair = [Word::from(v11_sliced[0]), Word::from(v11_sliced[1])];
-        let v12_sliced = u64_slice_to_words_le::<2>(&[v_mutation[12]]);
-        let v12_pair = [Word::from(v12_sliced[0]), Word::from(v12_sliced[1])];
-        let v13_sliced = u64_slice_to_words_le::<2>(&[v_mutation[13]]);
-        let v13_pair = [Word::from(v13_sliced[0]), Word::from(v13_sliced[1])];
-        let v14_sliced = u64_slice_to_words_le::<2>(&[v_mutation[14]]);
-        let v14_pair = [Word::from(v14_sliced[0]), Word::from(v14_sliced[1])];
-        let v15_sliced = u64_slice_to_words_le::<2>(&[v_mutation[15]]);
-        let v15_pair = [Word::from(v15_sliced[0]), Word::from(v15_sliced[1])];
-
-        cols.v = [v0_pair, v1_pair, v2_pair, v3_pair, v4_pair, v5_pair, v6_pair, v7_pair, v8_pair, v9_pair, v10_pair, v11_pair, v12_pair, v13_pair, v14_pair, v15_pair];
+        cols.v = Self::get_pair_vector_from_u64s::<F, 16>(v_mutation);
     }
 
     fn set_round_columns<F: PrimeField32>(cols: &mut Blake2fCompressColumns<F>, inner_round: usize, outer_round: usize) {
@@ -306,6 +263,31 @@ impl Blake2fCompressChip {
         let mut columns = [F::zero(); N];
         columns[true_column] = F::one();
         columns
+    }
+
+    // Takes a slice of u64s and converts them to a vector of pairs of words
+    fn get_pair_vector_from_u64s<F: PrimeField32, const N: usize>(u64_values: &[u64]) -> [[Word<F>; 2]; N] {
+        let mut v_pairs: [[Word<F>; 2]; N] = [[Word::from(0); 2]; N];
+        for i in 0..N {
+            v_pairs[i] = Self::get_words_from_u64(u64_values[i]);
+        }
+        v_pairs
+    }
+
+    fn get_pair_u32s_from_u64s<const N: usize>(u64_values: &[u64]) -> [[u32; 2]; N] {
+        let mut v_pairs: [[u32; 2]; N] = [[0; 2]; N];
+        for i in 0..N {
+            let u32_values = u64_slice_to_words_le::<2>(&[u64_values[i]]);
+            v_pairs[i] = [u32_values[0], u32_values[1]];
+        }
+        v_pairs
+    }
+
+    // Takes a u64 and converts it to a pair of words
+    fn get_words_from_u64<F: PrimeField32>(u64_value: u64) -> [Word<F>; 2] {
+        let v0_sliced = u64_slice_to_words_le::<2>(&[u64_value]);
+        let v0_pair = [Word::from(v0_sliced[0]), Word::from(v0_sliced[1])];
+        v0_pair
     }
 }
 
