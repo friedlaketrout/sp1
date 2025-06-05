@@ -5,6 +5,14 @@ use crate::events::{
     MemoryLocalEvent,
 };
 
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, Copy)]
+pub struct Mutation {
+    pub v: [u64; 16],
+    pub compress_intermediaries: Option<[u64; 16]>,
+    pub final_v_xor: Option<[u64; 8]>,
+}
+
 /// blake2f Compress Event.
 ///
 /// This event is emitted when a blake2f compress operation is performed.
@@ -31,7 +39,7 @@ pub struct Blake2fCompressEvent {
     /// Compression output
     pub result: [u64; 8],
     /// State mutations
-    pub v_mutations: Vec<[u64; 16]>,
+    pub mutations: Vec<Mutation>,
     /// Read records
     pub read_records: Vec<MemoryReadRecord>, // (1 + 16 + 32 + 4 + 1) = 54 u32 reads
     /// Write records

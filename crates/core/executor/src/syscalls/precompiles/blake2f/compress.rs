@@ -1,6 +1,6 @@
 use crate::{
     events::MemoryReadRecord,
-    events::{Blake2fCompressEvent, PrecompileEvent},
+    events::{Blake2fCompressEvent, PrecompileEvent, Mutation},
     syscalls::{Syscall, SyscallCode, SyscallContext},
 };
 
@@ -72,8 +72,8 @@ impl Syscall for Blake2fCompressSyscall {
         read_records.push(f_record);
 
         // Perform actual blake2f compress
-        let mut v_mutations: Vec<[u64; 16]> = Vec::new();
-        let result = compress(rounds, h, m, t0, t1, f, &mut v_mutations);
+        let mut mutations: Vec<Mutation> = Vec::new();
+        let result = compress(rounds, h, m, t0, t1, f, &mut mutations);
         println!("Calculated Result: {}", result.iter().map(|x| format!("{:016x}", x)).collect::<Vec<_>>().join(""));
 
         // Split back into u32 words
@@ -83,6 +83,9 @@ impl Syscall for Blake2fCompressSyscall {
         rt.clk += 1;
         // Blake2f todo: Is this the right pointer offset?
         let write_records = rt.mw_slice(base_ptr + 216 as u32, &result_u32);
+
+
+        println!("Mutations: {:?}", mutations.clone());
 
         // Push event
         let shard = rt.current_shard();
@@ -97,11 +100,12 @@ impl Syscall for Blake2fCompressSyscall {
             t1,
             f,
             result,
-            v_mutations,
+            mutations,
             read_records,
             write_records,
             local_mem_access: rt.postprocess(),
         });
+
 
         let syscall_event =
             rt.rt.syscall_event(start_clk, None, None, syscall_code, arg1, arg2, rt.next_pc);
@@ -115,7 +119,7 @@ impl Syscall for Blake2fCompressSyscall {
 
 // Core compression function, see https://datatracker.ietf.org/doc/html/rfc7693#section-3.2
 #[allow(clippy::many_single_char_names)]
-pub fn compress(rounds: u32, h: [u64; 8], m: [u64; 16], t0: u64, t1: u64, f: bool, v_mutations: &mut Vec<[u64; 16]>) -> [u64; 8] {
+pub fn compress(rounds: u32, h: [u64; 8], m: [u64; 16], t0: u64, t1: u64, f: bool, mutations: &mut Vec<Mutation>) -> [u64; 8] {
 
     // Build internal state
     let mut v = [0u64; 16];
@@ -136,34 +140,37 @@ pub fn compress(rounds: u32, h: [u64; 8], m: [u64; 16], t0: u64, t1: u64, f: boo
         v[14] = !v[14];
     }
     // First mutation, used to check first row of AIR
-    v_mutations.push(v);
+    mutations.push(Mutation { v: v.clone(), compress_intermediaries: None, final_v_xor: None });
 
     for i in 0..rounds as usize {
         let s = &SIGMA[i % 10];
-        G(&mut v, 0, 4, 8, 12, m[s[0]], m[s[1]], v_mutations);
-        G(&mut v, 1, 5, 9, 13, m[s[2]], m[s[3]], v_mutations);
-        G(&mut v, 2, 6, 10, 14, m[s[4]], m[s[5]], v_mutations);
-        G(&mut v, 3, 7, 11, 15, m[s[6]], m[s[7]], v_mutations);
-        G(&mut v, 0, 5, 10, 15, m[s[8]], m[s[9]], v_mutations);
-        G(&mut v, 1, 6, 11, 12, m[s[10]], m[s[11]], v_mutations);
-        G(&mut v, 2, 7, 8, 13, m[s[12]], m[s[13]], v_mutations);
-        G(&mut v, 3, 4, 9, 14, m[s[14]], m[s[15]], v_mutations);
+        G(&mut v, 0, 4, 8, 12, m[s[0]], m[s[1]], mutations);
+        G(&mut v, 1, 5, 9, 13, m[s[2]], m[s[3]], mutations);
+        G(&mut v, 2, 6, 10, 14, m[s[4]], m[s[5]], mutations);
+        G(&mut v, 3, 7, 11, 15, m[s[6]], m[s[7]], mutations);
+        G(&mut v, 0, 5, 10, 15, m[s[8]], m[s[9]], mutations);
+        G(&mut v, 1, 6, 11, 12, m[s[10]], m[s[11]], mutations);
+        G(&mut v, 2, 7, 8, 13, m[s[12]], m[s[13]], mutations);
+        G(&mut v, 3, 4, 9, 14, m[s[14]], m[s[15]], mutations);
     }
 
     let mut out = [0u64; 8];
+    let mut final_v_xor = [0u64; 8];
     for i in 0..8 {
+        let elem_xor = v[i] ^ v[i + 8];
+        final_v_xor[i] = elem_xor;
         // Need to reverse the bytes order, use big endian to do this
         // In reality, this result is actually little endian
-        out[i] = (h[i] ^ v[i] ^ v[i + 8]).to_be();
+        out[i] = (h[i] ^ elem_xor).to_be();
     }
-    v_mutations.push(v);
+    mutations.push(Mutation { v: v.clone(), compress_intermediaries: None, final_v_xor: Some(final_v_xor) });
     out
 }
 
 #[inline(always)]
 #[allow(clippy::many_single_char_names, non_snake_case)]
 // G mixing function, see: https://datatracker.ietf.org/doc/html/rfc7693#section-3.1
-fn G(v: &mut [u64; 16], a: usize, b: usize, c: usize, d: usize, x: u64, y: u64, v_mutations: &mut Vec<[u64; 16]>) {
+fn G(v: &mut [u64; 16], a: usize, b: usize, c: usize, d: usize, x: u64, y: u64, mutations: &mut Vec<Mutation>) {
     v[a] = v[a].wrapping_add(v[b]).wrapping_add(x);
     v[d] = (v[d] ^ v[a]).rotate_right(32);
     v[c] = v[c].wrapping_add(v[d]);
@@ -172,7 +179,7 @@ fn G(v: &mut [u64; 16], a: usize, b: usize, c: usize, d: usize, x: u64, y: u64, 
     v[d] = (v[d] ^ v[a]).rotate_right(16);
     v[c] = v[c].wrapping_add(v[d]);
     v[b] = (v[b] ^ v[c]).rotate_right(63);
-    v_mutations.push(*v);
+    mutations.push(Mutation { v: v.clone(), compress_intermediaries: None, final_v_xor: None });
 }
 
 /// Convert `2 * len` u32s into a `[u64; len]` assuming little-endian encoding.

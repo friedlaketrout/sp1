@@ -56,6 +56,7 @@ impl<F: PrimeField32> MachineAir<F> for Blake2fCompressChip {
         let mut rows = wrapped_rows.unwrap();
 
         println!("Rows: {:?}", rows.len());
+        println!("Rows: {:?}", rows);
 
         /////////////////
         // Padded rows //
@@ -150,8 +151,8 @@ impl Blake2fCompressChip {
         let mut outer_round = 9;
         Self::set_round_columns(cols, inner_round, outer_round);
 
-        let initial_v = event.v_mutations[0];
-        Self::set_v_values(cols, &initial_v);
+        let initial_mutation = event.mutations[0];
+        Self::set_v_values(cols, &initial_mutation.v);
 
         cols.f_flag = F::from_bool(event.f);
 
@@ -163,7 +164,7 @@ impl Blake2fCompressChip {
         ///////////////////
         // Compress rows //
         ///////////////////
-        for i in 1..(event.v_mutations.len() - 1) {
+        for i in 1..(event.mutations.len() - 1) {
             let mut row = [F::zero(); NUM_BLAKE2F_COMPRESS_COLS];
             let cols: &mut Blake2fCompressColumns<F> = row.as_mut_slice().borrow_mut();
 
@@ -182,9 +183,8 @@ impl Blake2fCompressChip {
             Self::set_round_columns(cols, inner_round, outer_round);
 
             // Get current mutations
-            let v_mutation = event.v_mutations[i];
-            Self::set_v_values(cols, &v_mutation);
-
+            let mutation = event.mutations[i];
+            Self::set_v_values(cols, &mutation.v);
 
             cols.f_flag = F::from_bool(event.f);
 
@@ -214,8 +214,12 @@ impl Blake2fCompressChip {
         }
         Self::set_round_columns(cols, inner_round, outer_round);
 
-        let final_v = event.v_mutations[event.v_mutations.len() - 1];
-        Self::set_v_values(cols, &final_v);
+        let final_mutation = event.mutations[event.mutations.len() - 1];
+        Self::set_v_values(cols, &final_mutation.v);
+
+        let final_v_xor = final_mutation.final_v_xor.unwrap();
+        println!("Final v xor: {:?}", final_v_xor);
+        Self::set_final_v_xor(cols, &final_v_xor);
 
         cols.f_flag = F::from_bool(event.f);
 
@@ -225,6 +229,27 @@ impl Blake2fCompressChip {
         }
 
         [inner_round, outer_round]
+    }
+
+    fn set_final_v_xor<F: PrimeField32>(cols: &mut Blake2fCompressColumns<F>, final_v_xor: &[u64; 8]) {
+        let v0_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[0]]);
+        let v0_pair = [Word::from(v0_sliced[0]), Word::from(v0_sliced[1])];
+        let v1_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[1]]);
+        let v1_pair = [Word::from(v1_sliced[0]), Word::from(v1_sliced[1])];
+        let v2_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[2]]);
+        let v2_pair = [Word::from(v2_sliced[0]), Word::from(v2_sliced[1])];
+        let v3_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[3]]);
+        let v3_pair = [Word::from(v3_sliced[0]), Word::from(v3_sliced[1])];
+        let v4_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[4]]);
+        let v4_pair = [Word::from(v4_sliced[0]), Word::from(v4_sliced[1])];
+        let v5_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[5]]);
+        let v5_pair = [Word::from(v5_sliced[0]), Word::from(v5_sliced[1])];
+        let v6_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[6]]);
+        let v6_pair = [Word::from(v6_sliced[0]), Word::from(v6_sliced[1])];
+        let v7_sliced = u64_slice_to_words_le::<2>(&[final_v_xor[7]]);
+        let v7_pair = [Word::from(v7_sliced[0]), Word::from(v7_sliced[1])];
+
+        cols.final_v_xor = [v0_pair, v1_pair, v2_pair, v3_pair, v4_pair, v5_pair, v6_pair, v7_pair];
     }
 
     fn set_v_values<F: PrimeField32>(cols: &mut Blake2fCompressColumns<F>, v_mutation: &[u64; 16]) {

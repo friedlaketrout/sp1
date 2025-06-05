@@ -44,6 +44,8 @@ pub struct  Blake2fCompressColumns<T> {
     pub v14: [Word<T>; 2],
     pub v15: [Word<T>; 2],
 
+    pub final_v_xor: [[Word<T>; 2]; 8],
+
     /// Final block flag (used as a selector/flag in AIR)
     pub f_flag: T,
 }

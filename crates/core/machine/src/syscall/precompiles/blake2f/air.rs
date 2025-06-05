@@ -24,7 +24,7 @@ const IV: [u64; 8] = [
     0x5be0cd19137e2179,
 ];
 
-const SIGMA: [[usize; 16]; 12] = [
+const SIGMA: [[usize; 16]; 10] = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
     [11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4],
@@ -35,8 +35,6 @@ const SIGMA: [[usize; 16]; 12] = [
     [13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10],
     [6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5],
     [10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0],
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
 ];
 
 const ABCD: [[usize; 4]; 8] = [
@@ -89,6 +87,7 @@ where
 
         self.eval_control_flow_flags(builder, local, next);
         self.eval_first_row(builder, local, next);
+        self.eval_compress(builder, local, next);
     }
 }
 
@@ -231,7 +230,6 @@ impl Blake2fCompressChip {
         // Check last word matches IV
         let [iv_word_7_0, iv_word_7_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[7]);
         builder.when_first_row().assert_word_eq(local.v15[0], iv_word_7_0);
-        builder.when_first_row().assert_word_eq(local.v15[1], iv_word_7_1);
     }
 
     fn eval_compress<AB: SP1AirBuilder>(
@@ -244,6 +242,11 @@ impl Blake2fCompressChip {
         // Start with 0 vector, fold sum each vector multiplied by associated outer_round boolean
         let mut correct_sigma = [0u64; 16];
         for i in 0..10 {
+            /*
+            let round = local.outer_round[i].into();
+            println!("round: {:?}", round);
+            */
+
             // Take outer_round[i] * SIGMA[i]
             // Add into v
             // outer_round is a sparse vector, only one element is true
