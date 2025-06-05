@@ -28,10 +28,19 @@ pub struct  Blake2fCompressColumns<T> {
     /// Last row
     pub is_last_row: T,
 
+    /// Is pad row
+    pub is_pad_row: T,
+
+    /// Constant user inputs
+    pub h: [[Word<T>; 2]; 8],
+    pub m: [[Word<T>; 2]; 16],
+    pub t0: [Word<T>; 2],
+    pub t1: [Word<T>; 2],
+    /// Final block flag (used as a selector/flag in AIR)
+    pub f_flag: T,
+
+    /// Mutating State
     pub v: [[Word<T>; 2]; 16],
 
     pub final_v_xor: [[XorOperation<T>; 2]; 8],
-
-    /// Final block flag (used as a selector/flag in AIR)
-    pub f_flag: T,
 }

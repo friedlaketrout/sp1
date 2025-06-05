@@ -63,14 +63,9 @@ const XY_INDICES: [[i32; 2]; 8] = [
 ];
 
 // blake2f todo: Get rid of these
-const h: [u64; 8] = [7640891576939301192, 13503953896175478587,
-     4354685564936845355, 11912009170470909681,
-      5840696475078001361, 11170449401992604703,
-       2270897969802886507, 6620516959819538809];
 const m: [u64; 16] = [6513249, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 const t0: u64 = 3;
 const t1: u64 = 0;
-const f_flag: bool = true;
 
 impl<F> BaseAir<F> for Blake2fCompressChip {
     fn width(&self) -> usize {
@@ -89,6 +84,7 @@ where
         let next: &Blake2fCompressColumns<AB::Var> = (*next).borrow();
 
         self.eval_control_flow_flags(builder, local, next);
+        self.eval_constants(builder, local, next);
         self.eval_first_row(builder, local, next);
         self.eval_compress(builder, local, next);
         self.eval_final_row(builder, local, next);
@@ -106,6 +102,13 @@ impl Blake2fCompressChip {
         for i in 0..8 {
             builder.assert_bool(local.inner_round[i]);
         }
+
+        // Check is_x_row is bool
+        // TODO: Check that if is_first_row is set, last row is not set, vice versa
+        // If pad row is set, all of the above should be false
+        builder.assert_bool(local.is_pad_row);
+        builder.assert_bool(local.is_first_row);
+        builder.assert_bool(local.is_last_row);
 
         // Check exactly one of the inner_round columns is true
         let mut inner_round_sum = AB::Expr::zero();
@@ -156,6 +159,47 @@ impl Blake2fCompressChip {
         builder.when_first_row().assert_one(local.outer_round[9]);
     }
 
+    // Ensure set of user inputs that don't mutate indeed are constant
+    // Includes: Initial state h, message m, t0, t1, f_flag
+    fn eval_constants<AB: SP1AirBuilder>(
+        &self,
+        builder: &mut AB,
+        local: &Blake2fCompressColumns<AB::Var>,
+        next: &Blake2fCompressColumns<AB::Var>,
+    ) {
+        // Check h is constant
+        for i in 0..8 {
+            for j in 0..2 {
+                builder.when_transition().when_not(next.is_pad_row).assert_word_eq(local.h[i][j], next.h[i][j]);
+                builder.when(local.is_pad_row).assert_word_zero(local.h[i][j]);
+            }
+        }
+
+        // Check m is constant
+        for i in 0..16 {
+            for j in 0..2 {
+                builder.when_transition().when_not(next.is_pad_row).assert_word_eq(local.m[i][j], next.m[i][j]);
+                builder.when(local.is_pad_row).assert_word_zero(local.m[i][j]);
+            }
+        }
+
+        // Check t0 is constant
+        for i in 0..2 {
+            builder.when_transition().when_not(next.is_pad_row).assert_word_eq(local.t0[i], next.t0[i]);
+            builder.when(local.is_pad_row).assert_word_zero(local.t0[i]);
+        }
+
+        // Check t1 is constant
+        for i in 0..2 {
+            builder.when_transition().when_not(next.is_pad_row).assert_word_eq(local.t1[i], next.t1[i]);
+            builder.when(local.is_pad_row).assert_word_zero(local.t1[i]);
+        }
+
+        // Check f_flag is constant
+        builder.when_transition().when_not(next.is_pad_row).assert_eq(local.f_flag, next.f_flag);
+        builder.when(local.is_pad_row).assert_zero(local.f_flag);
+    }
+
     fn eval_first_row<AB: SP1AirBuilder>(
         &self,
         builder: &mut AB,
@@ -164,7 +208,7 @@ impl Blake2fCompressChip {
     ) {
         // Check first eight words match h
         for i in 0..8 {
-            self.eval_u64_equality(builder, local.v[i], h[i]);
+            self.eval_wordpair_equality(builder, local.v[i], local.h[i]);
         }
 
         // Check next 4 words match IV
@@ -179,14 +223,27 @@ impl Blake2fCompressChip {
         const TO_CHECK_T1: u64 = IV[5] ^ t1;
         self.eval_u64_equality(builder, local.v[13], TO_CHECK_T1);
 
-        // Check 15th word is inverted if f_flag is set
-        if f_flag {
-            const TO_CHECK_INVERTED: u64 = !IV[6];
-            self.eval_u64_equality(builder, local.v[14], TO_CHECK_INVERTED);
-        }
+        // Check 15th word is inverted if f_flag is set, otherwise check 15th word matches 7th IV word
+        let [low_inverted, high_inverted]: [Word<AB::Expr>; 2] = u64_to_word_pair(!IV[6]);
+        builder.when_first_row().when(local.f_flag).assert_word_eq(local.v[14][0], low_inverted);
+        builder.when_first_row().when(local.f_flag).assert_word_eq(local.v[14][1], high_inverted);
+
+        let [low_normal, high_normal]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[6]);
+        builder.when_first_row().when_not(local.f_flag).assert_word_eq(local.v[14][0], low_normal);
+        builder.when_first_row().when_not(local.f_flag).assert_word_eq(local.v[14][1], high_normal);
 
         // Check last word matches IV
         self.eval_u64_equality(builder, local.v[15], IV[7]);
+    }
+
+    fn eval_wordpair_equality<AB: SP1AirBuilder>(
+        &self,
+        builder: &mut AB,
+        a: [Word<AB::Var>; 2],
+        b: [Word<AB::Var>; 2],
+    ) {
+        builder.when_first_row().assert_word_eq(a[0], b[0]);
+        builder.when_first_row().assert_word_eq(a[1], b[1]);
     }
 
     fn eval_u64_equality<AB: SP1AirBuilder>(

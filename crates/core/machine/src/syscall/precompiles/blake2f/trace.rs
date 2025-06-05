@@ -73,6 +73,8 @@ impl<F: PrimeField32> MachineAir<F> for Blake2fCompressChip {
         // Set the octet_num and octet columns for the padded rows.
         for row in rows[num_real_rows..].iter_mut() {
             let cols: &mut Blake2fCompressColumns<F> = row.as_mut_slice().borrow_mut();
+            cols.is_pad_row = F::one();
+
             cols.outer_round[outer_round] = F::one();
             cols.inner_round[inner_round] = F::one();
 
@@ -81,6 +83,9 @@ impl<F: PrimeField32> MachineAir<F> for Blake2fCompressChip {
                 outer_round = (outer_round + 1) % 10;
             }
             Self::set_round_columns(cols, inner_round, outer_round);
+
+            println!("h: {:?}", &cols.h);
+            println!("is_pad_row: {:?}", &cols.is_pad_row);
         };
 
         println!("Rows: {:?}", rows.len());
@@ -142,6 +147,9 @@ impl Blake2fCompressChip {
 
         cols.is_first_row = F::one();
         cols.is_last_row = F::zero();
+        cols.is_pad_row = F::zero();
+        // Set constant user inputs
+        Self::set_constant_user_inputs(cols, event);
 
         // Initial rounds
         // Set rounds to max value for first row so they wrap around starting at second row (i.e. first compress step)
@@ -152,7 +160,8 @@ impl Blake2fCompressChip {
         let initial_mutation = event.mutations[0];
         Self::set_v_values(cols, &initial_mutation.v);
 
-        cols.f_flag = F::from_bool(event.f);
+        println!("h: {:?}", &cols.h);
+        println!("is_pad_row: {:?}", &cols.is_pad_row);
 
         // Write row
         if rows.as_ref().is_some() {
@@ -172,7 +181,7 @@ impl Blake2fCompressChip {
 
             cols.is_first_row = F::zero();
             cols.is_last_row = F::zero();
-
+            cols.is_pad_row = F::zero();
             // Increment rounds
             inner_round = (inner_round + 1) % 8;
             if inner_round == 0 {
@@ -180,11 +189,15 @@ impl Blake2fCompressChip {
             }
             Self::set_round_columns(cols, inner_round, outer_round);
 
+            // Set constant user inputs
+            Self::set_constant_user_inputs(cols, event);
+
             // Get current mutations
             let mutation = event.mutations[i];
             Self::set_v_values(cols, &mutation.v);
 
-            cols.f_flag = F::from_bool(event.f);
+            println!("h: {:?}", &cols.h);
+            println!("is_pad_row: {:?}", &cols.is_pad_row);
 
             // Write row
             if rows.as_ref().is_some() {
@@ -204,6 +217,7 @@ impl Blake2fCompressChip {
 
         cols.is_first_row = F::zero();
         cols.is_last_row = F::one();
+        cols.is_pad_row = F::zero();
 
         // Increment rounds
         inner_round = (inner_round + 1) % 8;
@@ -212,12 +226,16 @@ impl Blake2fCompressChip {
         }
         Self::set_round_columns(cols, inner_round, outer_round);
 
+        // Set constant user inputs
+        Self::set_constant_user_inputs(cols, event);
+
         let final_mutation = event.mutations[event.mutations.len() - 1];
 
         Self::set_v_values(cols, &final_mutation.v);
         Self::set_final_v_xor(cols, &final_mutation.v, blu);
 
-        cols.f_flag = F::from_bool(event.f);
+        println!("h: {:?}", &cols.h);
+        println!("is_pad_row: {:?}", &cols.is_pad_row);
 
         // Write row
         if rows.as_ref().is_some() {
@@ -225,6 +243,14 @@ impl Blake2fCompressChip {
         }
 
         [inner_round, outer_round]
+    }
+
+    fn set_constant_user_inputs<F: PrimeField32>(cols: &mut Blake2fCompressColumns<F>, event: &Blake2fCompressEvent) {
+        cols.h = Self::get_pair_vector_from_u64s::<F, 8>(&event.h);
+        cols.m = Self::get_pair_vector_from_u64s::<F, 16>(&event.m);
+        cols.t0 = Self::get_words_from_u64(event.t0);
+        cols.t1 = Self::get_words_from_u64(event.t1);
+        cols.f_flag = F::from_bool(event.f);
     }
 
     // Takes final_v_xor u64s and converts them to a vector of pairs of words
