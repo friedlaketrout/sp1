@@ -241,6 +241,7 @@ pub mod tests {
             arg1: 2097860,
             arg2: 0,
         };
+        /*
         let third_syscall_event = SyscallEvent {
             pc: 2102156,
             next_pc: 2102160,
@@ -254,6 +255,7 @@ pub mod tests {
             arg1: 2097860,
             arg2: 0,
         };
+         */
 
         let config = BabyBearPoseidon2::new();
         let mut challenger = config.challenger();

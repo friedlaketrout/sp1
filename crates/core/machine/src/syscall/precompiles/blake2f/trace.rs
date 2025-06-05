@@ -2,11 +2,11 @@ use p3_field::PrimeField32;
 use p3_matrix::dense::RowMajorMatrix;
 use sp1_stark::{air::MachineAir, Word};
 use sp1_core_executor::{
-    events::{ByteLookupEvent, ByteRecord, Blake2fCompressEvent, PrecompileEvent, SyscallEvent},
+    events::{ByteLookupEvent, ByteRecord, Blake2fCompressEvent, PrecompileEvent},
     syscalls::SyscallCode,
     ExecutionRecord, Program,
 };
-use crate::{operations::XorOperation, utils::pad_rows_fixed};
+use crate::utils::pad_rows_fixed;
 use p3_maybe_rayon::prelude::ParallelSlice;
 use p3_maybe_rayon::prelude::ParallelIterator;
 use hashbrown::HashMap;
@@ -77,7 +77,7 @@ impl<F: PrimeField32> MachineAir<F> for Blake2fCompressChip {
             cols.inner_round[inner_round] = F::one();
 
             inner_round = (inner_round + 1) % 8;
-            if (inner_round == 0) {
+            if inner_round == 0 {
                 outer_round = (outer_round + 1) % 10;
             }
             Self::set_round_columns(cols, inner_round, outer_round);
@@ -129,8 +129,6 @@ impl Blake2fCompressChip {
         blu: &mut impl ByteRecord,
     ) -> [usize; 2] {
         println!("Generating rows for Blake2fCompress");
-
-        let og_h = event.h;
 
         ////////////////
         // First row //

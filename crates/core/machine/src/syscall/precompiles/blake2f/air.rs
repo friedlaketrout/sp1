@@ -14,6 +14,8 @@ use crate::operations::XorOperation;
 use super::columns::NUM_BLAKE2F_COMPRESS_COLS;
 use super::Blake2fCompressChip;
 
+#[allow(non_upper_case_globals)]
+
 const IV: [u64; 8] = [
     0x6a09e667f3bcc908,
     0xbb67ae8584caa73b,
@@ -161,78 +163,41 @@ impl Blake2fCompressChip {
         next: &Blake2fCompressColumns<AB::Var>,
     ) {
         // Check first eight words match h
-        let [h_word_0_0, h_word_0_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[0]);
-        builder.when_first_row().assert_word_eq(local.v[0][0], h_word_0_0);
-        builder.when_first_row().assert_word_eq(local.v[0][1], h_word_0_1);
-
-        let [h_word_1_0, h_word_1_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[1]);
-        builder.when_first_row().assert_word_eq(local.v[1][0], h_word_1_0);
-        builder.when_first_row().assert_word_eq(local.v[1][1], h_word_1_1);   
-
-        let [h_word_2_0, h_word_2_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[2]);
-        builder.when_first_row().assert_word_eq(local.v[2][0], h_word_2_0);
-        builder.when_first_row().assert_word_eq(local.v[2][1], h_word_2_1);   
-
-        let [h_word_3_0, h_word_3_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[3]);
-        builder.when_first_row().assert_word_eq(local.v[3][0], h_word_3_0);
-        builder.when_first_row().assert_word_eq(local.v[3][1], h_word_3_1);   
-
-        let [h_word_4_0, h_word_4_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[4]);
-        builder.when_first_row().assert_word_eq(local.v[4][0], h_word_4_0);
-        builder.when_first_row().assert_word_eq(local.v[4][1], h_word_4_1);   
-
-        let [h_word_5_0, h_word_5_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[5]);
-        builder.when_first_row().assert_word_eq(local.v[5][0], h_word_5_0);
-        builder.when_first_row().assert_word_eq(local.v[5][1], h_word_5_1);   
-
-        let [h_word_6_0, h_word_6_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[6]);
-        builder.when_first_row().assert_word_eq(local.v[6][0], h_word_6_0);
-        builder.when_first_row().assert_word_eq(local.v[6][1], h_word_6_1);   
-
-        let [h_word_7_0, h_word_7_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(h[7]);
-        builder.when_first_row().assert_word_eq(local.v[7][0], h_word_7_0);
-        builder.when_first_row().assert_word_eq(local.v[7][1], h_word_7_1);   
+        for i in 0..8 {
+            self.eval_u64_equality(builder, local.v[i], h[i]);
+        }
 
         // Check next 4 words match IV
-        let [iv_word_0_0, iv_word_0_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[0]);
-        builder.when_first_row().assert_word_eq(local.v[8][0], iv_word_0_0);
-        builder.when_first_row().assert_word_eq(local.v[8][1], iv_word_0_1);
-
-        let [iv_word_1_0, iv_word_1_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[1]);
-        builder.when_first_row().assert_word_eq(local.v[9][0], iv_word_1_0);
-        builder.when_first_row().assert_word_eq(local.v[9][1], iv_word_1_1);
-
-        let [iv_word_2_0, iv_word_2_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[2]);
-        builder.when_first_row().assert_word_eq(local.v[10][0], iv_word_2_0);
-        builder.when_first_row().assert_word_eq(local.v[10][1], iv_word_2_1);
-
-        let [iv_word_3_0, iv_word_3_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[3]);
-        builder.when_first_row().assert_word_eq(local.v[11][0], iv_word_3_0);
-        builder.when_first_row().assert_word_eq(local.v[11][1], iv_word_3_1);
+        for i in 0..4 {
+            self.eval_u64_equality(builder, local.v[8 + i], IV[i]);
+        }
 
         // Check 13th and 14th word properly handle offset
-        const TO_CHECK_13: u64 = IV[4] ^ t0;
-        let [xored_0_0, xored_0_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(TO_CHECK_13);
-        builder.when_first_row().assert_word_eq(local.v[12][0], xored_0_0);
-        builder.when_first_row().assert_word_eq(local.v[12][1], xored_0_1);
+        const TO_CHECK_T0: u64 = IV[4] ^ t0;
+        self.eval_u64_equality(builder, local.v[12], TO_CHECK_T0);
 
-        const TO_CHECK_14: u64 = IV[5] ^ t1;
-        let [xored_1_0, xored_1_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(TO_CHECK_14);
-        builder.when_first_row().assert_word_eq(local.v[13][0], xored_1_0);
-        builder.when_first_row().assert_word_eq(local.v[13][1], xored_1_1);
+        const TO_CHECK_T1: u64 = IV[5] ^ t1;
+        self.eval_u64_equality(builder, local.v[13], TO_CHECK_T1);
 
         // Check 15th word is inverted if f_flag is set
         if f_flag {
             const TO_CHECK_INVERTED: u64 = !IV[6];
-            let [inverted_0_0, inverted_0_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(TO_CHECK_INVERTED);
-            builder.when_first_row().assert_word_eq(local.v[14][0], inverted_0_0);
-            builder.when_first_row().assert_word_eq(local.v[14][1], inverted_0_1);
+            self.eval_u64_equality(builder, local.v[14], TO_CHECK_INVERTED);
         }
 
         // Check last word matches IV
-        let [iv_word_7_0, iv_word_7_1]: [Word<AB::Expr>; 2] = u64_to_word_pair(IV[7]);
-        builder.when_first_row().assert_word_eq(local.v[15][0], iv_word_7_0);
-        builder.when_first_row().assert_word_eq(local.v[15][1], iv_word_7_1);
+        self.eval_u64_equality(builder, local.v[15], IV[7]);
+    }
+
+    fn eval_u64_equality<AB: SP1AirBuilder>(
+        &self,
+        builder: &mut AB,
+        column_pair: [Word<AB::Var>; 2],
+        to_check: u64,
+    ) {
+        let [low, high]: [Word<AB::Expr>; 2] = u64_to_word_pair(to_check);
+        builder.when_first_row().assert_word_eq(column_pair[0], low);
+        builder.when_first_row().assert_word_eq(column_pair[1], high);
     }
 
     fn eval_compress<AB: SP1AirBuilder>(
@@ -243,6 +208,7 @@ impl Blake2fCompressChip {
     ) {
         // Get correct SIGMA vector
         // Start with 0 vector, fold sum each vector multiplied by associated outer_round boolean
+        /*
         let mut correct_sigma = [0u64; 16];
         for i in 0..10 {
             /*
@@ -274,6 +240,7 @@ impl Blake2fCompressChip {
             // Add into correct_abcd
             // inner_round is a sparse vector, only one element is true
         }
+        */
     }
 
     fn eval_final_row<AB: SP1AirBuilder>(

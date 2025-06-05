@@ -6,10 +6,16 @@ use crate::events::{
 };
 
 
+/// blake2f Mutation
+// blake2f todo: Rename to be blake2f specific
+// This might not actually even be necessary
 #[derive(Default, Debug, Clone, Serialize, Deserialize, Copy)]
 pub struct Mutation {
+    /// Core v state mutation
     pub v: [u64; 16],
+    /// Any intermediary values in compress steps
     pub compress_intermediaries: Option<[u64; 16]>,
+    /// Final x_or value
     pub final_v_xor: Option<[u64; 8]>,
 }
 
