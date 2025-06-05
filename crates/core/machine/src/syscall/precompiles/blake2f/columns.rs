@@ -27,22 +27,7 @@ pub struct  Blake2fCompressColumns<T> {
     /// Last row
     pub is_last_row: T,
 
-    pub v0: [Word<T>; 2],
-    pub v1: [Word<T>; 2],
-    pub v2: [Word<T>; 2],
-    pub v3: [Word<T>; 2],
-    pub v4: [Word<T>; 2],
-    pub v5: [Word<T>; 2],
-    pub v6: [Word<T>; 2],
-    pub v7: [Word<T>; 2],
-    pub v8: [Word<T>; 2],
-    pub v9: [Word<T>; 2],
-    pub v10: [Word<T>; 2],
-    pub v11: [Word<T>; 2],
-    pub v12: [Word<T>; 2],
-    pub v13: [Word<T>; 2],
-    pub v14: [Word<T>; 2],
-    pub v15: [Word<T>; 2],
+    pub v: [[Word<T>; 2]; 16],
 
     pub final_v_xor: [[Word<T>; 2]; 8],
 
